@@ -23,10 +23,10 @@
         "value": null
     },
     "GroupDescriptionRegex": {
-        "value": null
+        "value": "Rialto"
     },
     "AccountRegex": {
-        "value": "WinNT://[a-zA-Z]+/[a-zA-Z0-9]+"
+        "value": "WinNT://(AMR|GER|GAR|CCR)/[a-zA-Z0-9]+"
     },
     "MaxLineCount": {
         "value": null
@@ -56,6 +56,9 @@
         "value": null
     },
     "HideProgressBar": {
+        "value": null
+    },
+    "ProgressInterval": {
         "value": null
     },
     "Test": {
