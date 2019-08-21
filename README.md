@@ -134,7 +134,7 @@ Use the `ErrLog` switch to write error messages to a dedicated error log file. B
     [-NoLogo] `
     [<CommonParameters>]
 ```
-### Argumemnts
+### Arguments
 
 `-Export`
 
