@@ -402,61 +402,6 @@ function UpdateProgress {
 
         if ($remaining -gt 0) {
 
-            $currentTime = Get-Date
-
-            # Time spent to procss all items so far.
-            $timeSpan = New-TimeSpan -Start $startTime -End $currentTime
-
-            # How many milliseconds takes to process one item?
-            $speed      = $timeSpan.TotalMilliseconds / $processed
-
-            # Rate is dependent on speed: items/sec, items/min, items/hr.
-            $rate       = 0
-            $displayRate= $null
-
-            # Takes less then a second per item.
-            if ($speed -lt 1000) {
-                $rate           = 1000 / $speed
-                $displayRate    = "{0:n0}" -f $rate
-                $displayRate   += "/sec"
-            # Takes less then a minute per item.
-            } elseif ($speed -lt 60000) {
-                $rate           = 60000 / $speed
-                $displayRate    = "{0:n0}" -f $rate
-                $displayRate   += "/min"
-            # Takes less more than a minute per item.
-            } else {
-                $rate           = 360000 / $speed
-                $displayRate    = "{0:n0}" -f $rate
-                $displayRate   += "/hr"
-            }
-
-            # How many milliseconds to process the remaining items left?
-            $timeLeft           = [TimeSpan]::FromMilliseconds($remaining * $speed)
-            $displayTimeleft    = $null
-
-            # Format ETA.
-            if ($timeLeft.TotalSeconds -lt 60) {
-                $sec            = "{0:n0}" -f $timeLeft.Seconds
-                $displayTimeleft = "$sec sec"
-            } elseif ($timeLeft.TotalMinutes -lt 60) {
-                $min            = "{0:n0}" -f $timeLeft.Minutes
-                $displayTimeleft = "$min min"
-
-                if ($timeLeft.Seconds -gt 0) {
-                    $sec            = "{0:n0}" -f $timeLeft.Seconds
-                    $displayTimeleft += " $sec sec"
-                }
-            } else {
-                $hr            = "{0:n0}" -f $timeLeft.TotalHours
-                $displayTimeleft = "$hr hr"
-
-                if ($timeLeft.Minutes -gt 0) {
-                    $min            = "{0:n0}" -f $timeLeft.Minutes
-                    $displayTimeleft += " $min min"
-                }
-            }
-
             # Calculate percentage of processed items.
             $percent = ($processed / $total) * 100
             $displayPercent = "{0:n1}" -f $percent
@@ -464,7 +409,68 @@ function UpdateProgress {
             # Set the progress bar to the appropriate percentage.
             $params.Add("PercentComplete", $percent)
 
-            $status = "Processing $processed of $total ($displayPercent% complete, ETA: $displayTimeleft at $displayRate)"
+            # For the first item, we do not have enough info for accurate calculations.
+            if ($processed -gt 1) {
+                $currentTime = Get-Date
+
+                # Time spent to procss all items so far.
+                $timeSpan = New-TimeSpan -Start $startTime -End $currentTime
+
+                # How many milliseconds takes to process one item?
+                $speed      = $timeSpan.TotalMilliseconds / $processed
+
+                # Rate is dependent on speed: items/sec, items/min, items/hr.
+                $rate       = 0
+                $displayRate= $null
+
+                # Takes less then a second per item.
+                if ($speed -lt 1000) {
+                    $rate           = 1000 / $speed
+                    $displayRate    = "{0:n0}" -f $rate
+                    $displayRate   += "/sec"
+                # Takes less then a minute per item.
+                } elseif ($speed -lt 60000) {
+                    $rate           = 60000 / $speed
+                    $displayRate    = "{0:n0}" -f $rate
+                    $displayRate   += "/min"
+                # Takes less more than a minute per item.
+                } else {
+                    $rate           = 360000 / $speed
+                    $displayRate    = "{0:n0}" -f $rate
+                    $displayRate   += "/hr"
+                }
+
+                # How many milliseconds to process the remaining items left?
+                $timeLeft           = [TimeSpan]::FromMilliseconds($remaining * $speed)
+                $displayTimeleft    = $null
+
+                # Format ETA.
+                if ($timeLeft.TotalSeconds -lt 60) {
+                    $sec            = "{0:n0}" -f $timeLeft.Seconds
+                    $displayTimeleft = "$sec sec"
+                } elseif ($timeLeft.TotalMinutes -lt 60) {
+                    $min            = "{0:n0}" -f $timeLeft.Minutes
+                    $displayTimeleft = "$min min"
+
+                    if ($timeLeft.Seconds -gt 0) {
+                        $sec            = "{0:n0}" -f $timeLeft.Seconds
+                        $displayTimeleft += " $sec sec"
+                    }
+                } else {
+                    $hr            = "{0:n0}" -f $timeLeft.TotalHours
+                    $displayTimeleft = "$hr hr"
+
+                    if ($timeLeft.Minutes -gt 0) {
+                        $min            = "{0:n0}" -f $timeLeft.Minutes
+                        $displayTimeleft += " $min min"
+                    }
+                }
+
+                $status = "Processing $processed of $total ($displayPercent% complete, ETA: $displayTimeleft at $displayRate)"
+            }
+            else {
+                $status = "Processing $processed of $total ($displayPercent% complete)"
+            }
         }
         else {
             $params.Add("PercentComplete", 100)
