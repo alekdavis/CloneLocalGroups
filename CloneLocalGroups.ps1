@@ -76,11 +76,8 @@ Use this switch to specify a custom error log file location. When this parameter
 .PARAMETER ErrLogAppend
 Use this switch to appended error log entries to the existing error log file, if it exists (by default, the old error log file will be overwritten).
 
-.PARAMETER HideProgressBar
-Use this switch to suppress progress bar.
-
 .PARAMETER ProgressInterval
-The number of items that must be processed between progress updates. Set to higher number (100, 1000) for better performance.
+The number of items that must be processed between progress updates. Set to higher number (100, 1000) for better performance. Set to 0 to not display progress bar.
 
 .PARAMETER Test
 Use this switch to verify the process and data without making changes to the server. Applies to imports only.
@@ -214,12 +211,9 @@ param (
     [string]
     $ComputerName = $env:COMPUTERNAME,
 
-    [switch]
-    [Alias("HideProgress")]
-    $HideProgressBar,
-
     [int]
-    [ValidateRange(1, [int]::MaxValue)]
+    [ValidateRange(0, [int]::MaxValue)]
+    [Alias("Progress")]
     $ProgressInterval = 1,
 
     [Parameter(ParameterSetName="Import")]
@@ -345,6 +339,11 @@ function UpdateProgress {
         [datetime]
         $startTime
     )
+
+    # If interval is set to 0, do not show progress.
+    if ($Script:ProgressInterval -le 0) {
+        return
+    }
 
     $params = @{}
 
