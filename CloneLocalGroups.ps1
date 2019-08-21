@@ -79,6 +79,9 @@ Use this switch to appended error log entries to the existing error log file, if
 .PARAMETER HideProgressBar
 Use this switch to suppress progress bar.
 
+.PARAMETER ProgressInterval
+The number of items that must be processed between progress updates. Set to higher number (100, 1000) for better performance.
+
 .PARAMETER Test
 Use this switch to verify the process and data without making changes to the server. Applies to imports only.
 
@@ -95,7 +98,7 @@ Specify this command-line switch to not print version and copyright info.
 Path to the optional custom config file. The default config file is named after the script with the '.json' extension, such as 'CloneLocalGroups.ps1.json'.
 
 .NOTES
-Version    : 1.0.2
+Version    : 1.0.3
 Author     : Alek Davis
 Created on : 2019-08-20
 License    : MIT License
@@ -215,6 +218,10 @@ param (
     [Alias("HideProgress")]
     $HideProgressBar,
 
+    [int]
+    [ValidateRange(1, [int]::MaxValue)]
+    $ProgressInterval = 1,
+
     [Parameter(ParameterSetName="Import")]
     [Alias("T")]
     [switch]
@@ -314,9 +321,9 @@ function CountLines {
 
 
 #--------------------------------------------------------------------------
-# ShowProgress
+# UpdateProgress
 #   Displays progress bar with message.
-function ShowProgress {
+function UpdateProgress {
     param (
         [string]
         $activity,
@@ -340,6 +347,31 @@ function ShowProgress {
     )
 
     $params = @{}
+
+    $update = $false
+
+    # Always update progress with the last item
+    if ($processed -eq $total) {
+        $update = $true
+    }
+    # Always update if interval is 1.
+    elseif ($Script:ProgressInterval -eq 1) {
+        $update = $true
+    }
+    # Update every n-th (interval) item.
+    elseif ($Script:ProgressInterval -gt 0) {
+        # Update always for the first item.
+        if ($processed -eq 1) {
+            $update = $true
+        }
+        elseif (($processed % $Script:ProgressInterval) -eq 0) {
+            $update = $true
+        }
+    }
+
+    if (!$update) {
+        return
+    }
 
     # Once we reach the last record, mark progress as completed.
     if (($total -gt 0) -and ($processed -ge $total)) {
@@ -370,6 +402,7 @@ function ShowProgress {
         $remaining = $total - $processed
 
         if ($remaining -gt 0) {
+
             $currentTime = Get-Date
 
             # Time spent to procss all items so far.
@@ -1040,7 +1073,7 @@ function Import {
             }
 
             if (!($Script:HideProgress)) {
-                ShowProgress $activity $groupName $account $current $total $startTime
+                UpdateProgress $activity $groupName $account $current $total $startTime
             }
 
             $groupCN = "$server/$groupName,group"
@@ -1108,7 +1141,7 @@ function Import {
     finally {
         $reader.Close()
         if (!($Script:HideProgress)) {
-            ShowProgress $activity $null $null $total $total $startTime
+            UpdateProgress $activity $null $null $total $total $startTime
         }
     }
 
@@ -1185,7 +1218,7 @@ function Export {
                 $count++
 
                 if (!($Script:HideProgress)) {
-                    ShowProgress $activity $group.Name $null $count 0 $startTime
+                    UpdateProgress $activity $group.Name $null $count 0 $startTime
                 }
             }
 
@@ -1227,7 +1260,7 @@ function Export {
                 $count++
 
                 if (!($Script:HideProgress)) {
-                    ShowProgress $activity $group.Name $account $count 0 $startTime
+                    UpdateProgress $activity $group.Name $account $count 0 $startTime
                 }
             }
         }
@@ -1236,7 +1269,7 @@ function Export {
         $writer.Close()
 
         if (!($Script:HideProgress)) {
-            ShowProgress $activity $null $null $count $count $startTime
+            UpdateProgress $activity $null $null $count $count $startTime
         }
     }
 
@@ -1358,9 +1391,11 @@ $count = 0
 
 try {
     if ($Export) {
+        LogMessage "Exporting..."
         $count = Export $startTime
     }
     else {
+        LogMessage "Importing..."
         $count = Import $startTime
     }
 }
