@@ -27,7 +27,7 @@ Tells the script to perform the export operation, which is the default mode.
 Tells the script to perform the import operation. If not specified, the '-Export' parameter will be assumed.
 
 .PARAMETER DataFile
-Defines the full path to the date file holding imported or exported data. The file must contain three text entries separated by tabs (or explicitly defined separator):
+Defines the full path to the date file holding imported or exported data. The data file contains three text entries separated by tabs (or explicitly defined separator):
 
 - Name of the local group
 - Name of the account in the format: WinNT://DOMAIN/user
@@ -54,6 +54,12 @@ Specifies the regular expression that the group descriptions must match. Applies
 
 .PARAMETER AccountRegex
 Specifies the regular expression that the member account name must match. Applies to exports only.
+
+.PARAMETER NoMembers
+Use this switch to export groups only (without members).
+
+.PARAMETER WithHeader
+When set, the data file will or will be assumed to include column header in the first row.
 
 .PARAMETER ModulePath
 Optional path to directory holding the modules used by this script. This can be useful if the script runs on the system with no or restricted access to the Internet. By default, the module path will point to the 'Modules' folder in the script's folder.
@@ -95,9 +101,9 @@ Specify this command-line switch to not print version and copyright info.
 Path to the optional custom config file. The default config file is named after the script with the '.json' extension, such as 'CloneLocalGroups.ps1.json'.
 
 .NOTES
-Version    : 1.0.3
+Version    : 1.0.4
 Author     : Alek Davis
-Created on : 2019-08-20
+Created on : 2019-08-21
 License    : MIT License
 LicenseLink: https://github.com/alekdavis/CloneLocalGroups/blob/master/LICENSE
 Copyright  : (c) 2019 Intel Corporation
@@ -179,6 +185,13 @@ param (
     [Parameter(ParameterSetName="Export")]
     [string]
     $AccountRegex = ".",
+
+    [Parameter(ParameterSetName="Export")]
+    [switch]
+    $NoMembers,
+
+    [switch]
+    $WithHeader,
 
     [string]
     $ModulePath = "$PSScriptRoot\Modules",
@@ -289,7 +302,25 @@ function LoadModule {
 # GetTimestamp
 #   Returns current timestamp in a consistent format.
 function GetTimestamp {
-    return $(Get-Date).ToString("yyyy/MM/dd HH:mm:ss.fff")
+    param (
+        [datetime]
+        $date = $null,
+
+        [bool]
+        $withMsec = $true
+    )
+
+    if (!$date) {
+        $date = Get-Date
+    }
+
+    $format = "yyyy/MM/dd HH:mm:ss"
+
+    if ($withMsec) {
+        $format += ".fff"
+    }
+
+    return $date.ToString($format)
 }
 
 #--------------------------------------------------------------------------
@@ -341,7 +372,7 @@ function UpdateProgress {
     )
 
     # If interval is set to 0, do not show progress.
-    if ($Script:ProgressInterval -le 0) {
+    if ($Script:ProgressInterval -lt 1) {
         return
     }
 
@@ -358,7 +389,7 @@ function UpdateProgress {
         $update = $true
     }
     # Update every n-th (interval) item.
-    elseif ($Script:ProgressInterval -gt 0) {
+    else {
         # Update always for the first item.
         if ($processed -eq 1) {
             $update = $true
@@ -1038,7 +1069,7 @@ function Import {
     $current = 0
 
     # Calculate the number of lines in file for the progress info.
-    if (!($Script:HideProgress)) {
+    if ($Script:ProgressInterval -gt 0) {
         LogDetailed "Counting lines in the data file..."
 
         $total = CountLines $Script:DataFile $Script:MaxLineCount
@@ -1052,6 +1083,12 @@ function Import {
     try {
         while ($null -ne ($line = $reader.ReadLine())) {
             $current++
+
+            # Skip the header line.
+            if (($current -eq 1) -and ($Script:WithHeader)) {
+                continue
+            }
+
             $groupName  = $null
             $account    = $null
             $description= $null
@@ -1077,9 +1114,7 @@ function Import {
                 continue
             }
 
-            if (!($Script:HideProgress)) {
-                UpdateProgress $activity $groupName $account $current $total $startTime
-            }
+            UpdateProgress $activity $groupName $account $current $total $startTime
 
             $groupCN = "$server/$groupName,group"
 
@@ -1145,9 +1180,8 @@ function Import {
     }
     finally {
         $reader.Close()
-        if (!($Script:HideProgress)) {
-            UpdateProgress $activity $null $null $total $total $startTime
-        }
+
+        UpdateProgress $activity $null $null $total $total $startTime
     }
 
     return $count
@@ -1198,6 +1232,12 @@ function Export {
     $writer = New-Object System.IO.StreamWriter $Script:DataFile
 
     try {
+        # Write header line.
+        if ($Script:WithHeader) {
+            $data = "GROUP$($Script:Separator)ACCOUNT$($Script:Separator)DESCRIPTION"
+            $writer.WriteLine($data)
+        }
+
         foreach ($group in $groups) {
             LogDetailed "Group:"
             LogDetailed (Indent $group.Name)
@@ -1222,9 +1262,7 @@ function Export {
 
                 $count++
 
-                if (!($Script:HideProgress)) {
-                    UpdateProgress $activity $group.Name $null $count 0 $startTime
-                }
+                UpdateProgress $activity $group.Name $null $count 0 $startTime
             }
 
             [ADSI]$adsiGroup = "$($group.Parent)/$($group.Name),group"
@@ -1248,6 +1286,21 @@ function Export {
                     continue
                 }
 
+                # When exporting groups only, skip members.
+                if ($Script:NoMembers) {
+                    if ($Script:ExcludeEmptyGroups) {
+                        # We haven't exported the group info, yet.
+                        $data = "$($group.Name)$($Script:Separator)$($Script:Separator)$description"
+                        $writer.WriteLine($data)
+
+                        $count++
+
+                        UpdateProgress $activity $group.Name $null $count 0 $startTime
+                    }
+
+                    break;
+                }
+
                 # Display Members heading.
                 if ($msg) {
                     LogMessage $msg
@@ -1264,18 +1317,14 @@ function Export {
 
                 $count++
 
-                if (!($Script:HideProgress)) {
-                    UpdateProgress $activity $group.Name $account $count 0 $startTime
-                }
+                UpdateProgress $activity $group.Name $account $count 0 $startTime
             }
         }
     }
     finally {
         $writer.Close()
 
-        if (!($Script:HideProgress)) {
-            UpdateProgress $activity $null $null $count $count $startTime
-        }
+        UpdateProgress $activity $null $null $count $count $startTime
     }
 
     return $count
@@ -1291,7 +1340,7 @@ $Error.Clear()
 
 # Save time for logging purposes.
 $startTime = Get-Date
-$displayStartTime = GetTimestamp
+$displayStartTime = GetTimestamp $startTime $false
 
 # Add custom folder(s) to the module path.
 if ($ModulePath) {
@@ -1411,10 +1460,10 @@ catch {
 LogMessage "Processed items:"
 LogMessage (Indent $count)
 
-LogMessage "Script ended at:"
-LogMessage (Indent (GetTimestamp))
-
 $endTime = Get-Date
+
+LogMessage "Script ended at:"
+LogMessage (Indent (GetTimestamp $endTime $false))
 
 LogMessage "Script ran for (hr:min:sec.msec):"
 LogMessage (Indent (New-TimeSpan -Start $startTime -End $endTime).ToString("hh\:mm\:ss\.fff"))
