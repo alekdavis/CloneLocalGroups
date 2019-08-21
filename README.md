@@ -154,10 +154,12 @@ Defines the full path to the date file holding imported or exported data. The fi
 
 The group description is only needed the first time the group appears in the file. For groups with no members, the name of the account may be left blank. Here is an example of the data file (with the tab characters identified by '{TAB}'):
 
+```
 Group A{TAB}{TAB}Empty group with no members.
 Group B{TAB}WinNT://CONTOSO/jdoe{TAB}Group with two members.
 Group B{TAB}WinNT://CONTOSO/jschmoe{TAB}
 Group C{TAB}WinNT://CONTOSO/mjane{TAB}Group with one member.
+```
 
 `-Separator`
 
