@@ -21,10 +21,13 @@ If the system on which the script runs has limited or does not have access to th
 You can log the information about the performed operations and/or errors to the log and/or error log files.
 
 .PARAMETER Export
-Tells the script to perform the export operation, which is the default mode.
+Export local groups to the data file.
 
 .PARAMETER Import
-Tells the script to perform the import operation. If not specified, the '-Export' parameter will be assumed.
+Import local groups from the data file.
+
+.PARAMETER Delete
+Delete local groups and/or members specified in the data file.
 
 .PARAMETER DataFile
 Defines the full path to the date file holding imported or exported data. The data file contains three text entries separated by tabs (or explicitly defined separator):
@@ -44,7 +47,7 @@ Group C{TAB}WinNT://CONTOSO/mjane{TAB}Group with one member.
 Defines column separator used in the data file. The default separator is TAB. Do not use comma as a separator, because it can appear in data, such as group names or descriptions.
 
 .PARAMETER ExcludeEmptyGroups
-Use this switch to tell the script to not export empty groups.
+Use this switch to tell the script to not export empty groups. Applies to exports only.
 
 .PARAMETER GroupNameRegex
 Specifies the regular expression that the group names must match. Applies to exports only.
@@ -56,7 +59,7 @@ Specifies the regular expression that the group descriptions must match. Applies
 Specifies the regular expression that the member account name must match. Applies to exports only.
 
 .PARAMETER NoMembers
-Use this switch to export groups only (without members).
+Use this switch to export groups only (without members). Applies to exports only.
 
 .PARAMETER WithHeader
 When set, the data file will or will be assumed to include column header in the first row.
@@ -86,7 +89,7 @@ Use this switch to appended error log entries to the existing error log file, if
 The number of items that must be processed between progress updates. Set to higher number (100, 1000) for better performance. Set to 0 to not display progress bar.
 
 .PARAMETER Test
-Use this switch to verify the process and data without making changes to the server. Applies to imports only.
+Use this switch to verify the process and data without making changes to the server (for the import or delete operations) or the data file (for exports).
 
 .PARAMETER Detailed
 Use this switch to log more details about the performed operations. Keep in mind that it can negatively affect the script performance (by the order of magnitude).
@@ -101,12 +104,12 @@ Specify this command-line switch to not print version and copyright info.
 Path to the optional custom config file. The default config file is named after the script with the '.json' extension, such as 'CloneLocalGroups.ps1.json'.
 
 .NOTES
-Version    : 1.0.4
+Version    : 1.0.5
 Author     : Alek Davis
-Created on : 2019-08-21
+Created on : 2019-08-22
 License    : MIT License
 LicenseLink: https://github.com/alekdavis/CloneLocalGroups/blob/master/LICENSE
-Copyright  : (c) 2019 Intel Corporation
+Copyright  : (c) 2019 Alek Davis
 
 .LINK
 https://github.com/alekdavis/CloneLocalGroups
@@ -128,6 +131,10 @@ Imports local groups with members from the specified data file.
 .EXAMPLE
 .\CloneLocalGroups.ps1 -Import -DataFile "D:\Data\MYSERVER.txt" -Test
 Perform a dry run for the import operation without creating groups or assigning group members.
+
+.EXAMPLE
+.\CloneLocalGroups.ps1 -Delete -DataFile "D:\Data\MYSERVER.txt"
+Deletes local groups and/or members defined in the specified data file.
 
 .EXAMPLE
 Get-Help .\CloneLocalGroups.ps1
@@ -167,6 +174,11 @@ param (
     [switch]
     $Import,
 
+    [Parameter(ParameterSetName="Delete")]
+    [Alias("D")]
+    [switch]
+    $Delete,
+
     [string]
     $Separator = "`t",
 
@@ -196,7 +208,6 @@ param (
     [string]
     $ModulePath = "$PSScriptRoot\Modules",
 
-    [Alias("L")]
     [switch]
     $Log,
 
@@ -206,7 +217,6 @@ param (
     [string]
     $LogFile,
 
-    [Alias("EL")]
     [switch]
     $ErrLog,
 
@@ -229,7 +239,6 @@ param (
     [Alias("Progress")]
     $ProgressInterval = 1,
 
-    [Parameter(ParameterSetName="Import")]
     [Alias("T")]
     [switch]
     $Test,
@@ -904,7 +913,7 @@ function Init {
     )
 
     # Export is the default operation.
-    if (!$Script:Export -and !$Script:Import) {
+    if (!$Script:Export -and !$Script:Import -and !$Script:Delete) {
         $Script:Export = $true
     }
 
@@ -912,8 +921,11 @@ function Init {
     if ($Script:Export) {
         $Script:Operation = "Export"
     }
-    else {
+    elseif ($Script:Import) {
         $Script:Operation = "Import"
+    }
+    else {
+        $Script:Operation = "Delete"
     }
 
     # If not specified, generate the path to default data file.
@@ -1045,6 +1057,7 @@ function CreateGroup {
 
     return $true
 }
+
 #--------------------------------------------------------------------------
 # Import
 #   Imports local groups or group members from a text file.
@@ -1058,15 +1071,13 @@ function Import {
     $total   = 0
     $current = 0
 
-    $activity = "Importing local group members"
     $skipMembers = $false
-    $lastGroupName = ""
-    $server = "WinNT://$($Script:ComputerName)"
 
-    $msg = $null
+    $activity   = "Importing local groups"
+    $server     = "WinNT://$($Script:ComputerName)"
 
-    $total   = 0
-    $current = 0
+    $lastGroupName  = ""
+    $msg            = $null
 
     # Calculate the number of lines in file for the progress info.
     if ($Script:ProgressInterval -gt 0) {
@@ -1126,8 +1137,8 @@ function Import {
 
                 $skipMembers = $false
 
-                if (!$Script:Test) {
-                    if (-not ([ADSI]::Exists($groupCN))) {
+                if (-not ([ADSI]::Exists($groupCN))) {
+                    if (!$Script:Test) {
                         if (-not (CreateGroup $groupName $description)) {
                             # Could not create the groups: no point in assigning members.
                             $skipMembers = $true
@@ -1145,6 +1156,7 @@ function Import {
 
             # If account field is missing, skip.
             if (!$account) {
+                $count++
                 continue
             }
 
@@ -1157,7 +1169,7 @@ function Import {
             LogDetailed (Indent $account)
             try {
                 if (!$Script:Test) {
-                   ([ADSI]$groupCN).add($account)
+                   ([ADSI]$groupCN).Add($account)
                 }
                 $count++
             }
@@ -1197,22 +1209,24 @@ function Export {
     )
 
     $count = 0
-    $activity = "Exporting local group members"
+    $activity = "Exporting local groups"
 
     # Delete old data file if it already exists.
     if (Test-Path -Path $Script:DataFile -PathType Leaf) {
-        try {
-            Remove-Item -Path $Script:DataFile -Force
-        }
-        catch {
-            LogError "Cannot delete old data file:"
-            LogError (Indent $Script:DataFile)
+        if (!$Script:Test) {
+            try {
+                Remove-Item -Path $Script:DataFile -Force
+            }
+            catch {
+                LogError "Cannot delete old data file:"
+                LogError (Indent $Script:DataFile)
 
-            LogException $_
+                LogException $_
 
-            $Error.Clear()
+                $Error.Clear()
 
-            return $count
+                return $count
+            }
         }
     }
 
@@ -1229,13 +1243,17 @@ function Export {
     }
 
     # This is the most efficient way of appending an output text file.
-    $writer = New-Object System.IO.StreamWriter $Script:DataFile
+    if (!$Script:Test) {
+        $writer = New-Object System.IO.StreamWriter $Script:DataFile
+    }
 
     try {
         # Write header line.
-        if ($Script:WithHeader) {
-            $data = "GROUP$($Script:Separator)ACCOUNT$($Script:Separator)DESCRIPTION"
-            $writer.WriteLine($data)
+        if (!$Script:Test) {
+            if ($Script:WithHeader) {
+                $data = "GROUP$($Script:Separator)ACCOUNT$($Script:Separator)DESCRIPTION"
+                $writer.WriteLine($data)
+            }
         }
 
         foreach ($group in $groups) {
@@ -1257,7 +1275,11 @@ function Export {
             # By default, include empty groups.
             if (!$Script:ExcludeEmptyGroups) {
                 $data = "$($group.Name)$($Script:Separator)$($Script:Separator)$description"
-                $writer.WriteLine($data)
+
+                if (!$Script:Test) {
+                    $writer.WriteLine($data)
+                }
+
                 $description = ""
 
                 $count++
@@ -1291,7 +1313,10 @@ function Export {
                     if ($Script:ExcludeEmptyGroups) {
                         # We haven't exported the group info, yet.
                         $data = "$($group.Name)$($Script:Separator)$($Script:Separator)$description"
-                        $writer.WriteLine($data)
+
+                        if (!$Script:Test) {
+                            $writer.WriteLine($data)
+                        }
 
                         $count++
 
@@ -1303,14 +1328,17 @@ function Export {
 
                 # Display Members heading.
                 if ($msg) {
-                    LogMessage $msg
+                    LogDetailed $msg
                     $msg = $null
                 }
 
                 LogDetailed (Indent $account)
 
                 $data = "$($group.Name)$($Script:Separator)$account$($Script:Separator)$description"
-                $writer.WriteLine($data)
+
+                if (!$Script:Test) {
+                    $writer.WriteLine($data)
+                }
 
                 # No need for description after the first group member was exported.
                 $description = ""
@@ -1322,9 +1350,182 @@ function Export {
         }
     }
     finally {
-        $writer.Close()
+        if (!$Script:Test) {
+            $writer.Close()
+        }
 
         UpdateProgress $activity $null $null $count $count $startTime
+    }
+
+    return $count
+}
+
+#--------------------------------------------------------------------------
+# Delete
+#   Deletes local groups or group members via a text file.
+function Delete {
+    param(
+        [datetime]
+        $startTime
+    )
+
+    $count   = 0
+    $total   = 0
+    $current = 0
+
+    $skipMembers = $false
+
+    $activity   = "Deleting local groups"
+    $server     = "WinNT://$($Script:ComputerName)"
+
+    $lastGroupName  = ""
+    $msg            = $null
+
+    # Calculate the number of lines in file for the progress info.
+    if ($Script:ProgressInterval -gt 0) {
+        LogDetailed "Counting lines in the data file..."
+
+        $total = CountLines $Script:DataFile $Script:MaxLineCount
+
+        LogDetailed "Lines in the data file:"
+        LogDetailed (Indent $total)
+    }
+
+    $reader = [System.IO.File]::OpenText($Script:DataFile)
+
+    try {
+        while ($null -ne ($line = $reader.ReadLine())) {
+            $current++
+
+            # Skip the header line.
+            if (($current -eq 1) -and ($Script:WithHeader)) {
+                continue
+            }
+
+            $groupName  = $null
+            $account    = $null
+            $description= $null
+
+            try {
+                $groupName, $account, $description = $line -split $Script:Separator
+
+                if ($groupName) { $groupName = $groupName.Trim() }
+                if ($account)   { $account   = $account.Trim() }
+            }
+            catch {
+                LogError "Invalid line format:"
+                LogError (Indent $line)
+
+                LogException $_
+
+                $Error.Clear()
+            }
+
+            # If there is no group name, skip this line.
+            if (!$groupName) {
+                continue
+            }
+
+            UpdateProgress $activity $groupName $account $current $total $startTime
+
+            $groupCN = "$server/$groupName,group"
+
+            if ($groupName -ne $lastGroupName) {
+
+                LogDetailed "Group:"
+                LogDetailed (Indent $groupName)
+
+                $skipMembers = $false
+            }
+
+            # If we do not have a user account, delete the group.
+            if (!$account) {
+                if ([ADSI]::Exists($groupCN)) {
+                    try {
+                        if (!$Script:Test) {
+                            $server.Delete('group', $groupName);
+                        }
+
+                        # No need to delete members if the group was deleted.
+                        $skipMembers = $false
+                        $count++
+                    }
+                    catch {
+                        LogError "Cannot delete group:"
+                        LogError (Indent $groupName)
+
+                        LogException $_
+                    }
+                }
+                else {
+                    # No need to delete members if the group does not exist.
+                    $skipMembers = $false
+                    $count++
+                }
+
+                $lastGroupName = $groupName
+                $msg = "Members:"
+            }
+            # Delete account from group.
+            else {
+                if ($lastGroupName -ne $groupName) {
+                    LogDetailed "Group:"
+                    LogDetailed (Indent $groupName)
+
+                    $skipMembers = $false
+                    $msg = "Members:"
+                }
+
+                if ($skipMembers) {
+                    $msg = $null
+                    continue
+                }
+
+                # Log header for members.
+                if ($msg) {
+                    LogDetailed $msg
+                    $msg = $null
+                }
+
+                LogDetailed (Indent $account)
+
+                if (![ADSI]::Exists($groupCN)){
+                    $skipMembers = $true
+                }
+                else {
+                    try {
+                        if (!$Script:Test) {
+                            ([ADSI]$groupCN).Remove($account)
+                        }
+                        $count++
+                    }
+                    catch {
+                        $_.Exception.InnerException.ErrorCode
+
+                        if ($_.Exception.InnerException.ErrorCode -eq $ERRCODE_USER_ALREADY_A_MEMBER) {
+                            $count++
+                        }
+                        else {
+                            LogError "Cannot remove account:"
+                            LogError (Indent $account)
+                            LogError "from group:"
+                            LogError (Indent $groupName)
+
+                            LogException $_
+                        }
+
+                        $Error.Clear()
+                    }
+                }
+
+                $lastGroupName = $groupName
+           }
+        }
+    }
+    finally {
+        $reader.Close()
+
+        UpdateProgress $activity $null $null $total $total $startTime
     }
 
     return $count
@@ -1448,9 +1649,13 @@ try {
         LogMessage "Exporting..."
         $count = Export $startTime
     }
-    else {
+    elseif ($Import) {
         LogMessage "Importing..."
         $count = Import $startTime
+    }
+    else {
+        LogMessage "Deleting..."
+        $count = Delete $startTime
     }
 }
 catch {
