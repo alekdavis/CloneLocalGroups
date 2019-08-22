@@ -10,6 +10,9 @@
     "Import": {
         "value": null
     },
+    "Delete": {
+        "value": null
+    },
     "DataFile": {
         "value": null
     },
@@ -26,7 +29,7 @@
         "value": ".*"
     },
     "AccountRegex": {
-        "value": "WinNT://[a-zA-Z]+/[a-zA-Z0-9]+"
+        "value": "WinNT://[a-zA-Z]/[a-zA-Z0-9]+"
     },
     "NoMembers": {
         "value": null
