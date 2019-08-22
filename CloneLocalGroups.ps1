@@ -43,6 +43,12 @@ Group B{TAB}WinNT://CONTOSO/jdoe{TAB}Group with two members.
 Group B{TAB}WinNT://CONTOSO/jschmoe{TAB}
 Group C{TAB}WinNT://CONTOSO/mjane{TAB}Group with one member.
 
+When exporting data, if the 'ExcludeEmptyGroups' switch is not set, all data file entries will contain group members; otherwise, there will be a separate entry for each exported group with no member information.
+
+The group description is needed only the first time the group appears in the data file.
+
+When deleting data, if the data file entry does not include member information, the whole group will be deleted. If member information is included, the member will be removed from the group.
+
 .PARAMETER Separator
 Defines column separator used in the data file. The default separator is TAB. Do not use comma as a separator, because it can appear in data, such as group names or descriptions.
 
@@ -160,10 +166,6 @@ GETVERSION COMMANDS WILL NOT WORK.
 # above).
 [CmdletBinding(DefaultParameterSetName="default")]
 param (
-    [Parameter(Position=0)]
-    [string]
-    $DataFile,
-
     [Parameter(ParameterSetName="Export")]
     [Alias("E")]
     [switch]
@@ -179,12 +181,23 @@ param (
     [switch]
     $Delete,
 
+    [Parameter(Position=0)]
+    [string]
+    $DataFile,
+
     [string]
     $Separator = "`t",
+
+    [switch]
+    $WithHeader,
 
     [Parameter(ParameterSetName="Export")]
     [switch]
     $ExcludeEmptyGroups,
+
+    [Parameter(ParameterSetName="Export")]
+    [switch]
+    $NoMembers,
 
     [Parameter(ParameterSetName="Export")]
     [string]
@@ -197,13 +210,6 @@ param (
     [Parameter(ParameterSetName="Export")]
     [string]
     $AccountRegex = ".",
-
-    [Parameter(ParameterSetName="Export")]
-    [switch]
-    $NoMembers,
-
-    [switch]
-    $WithHeader,
 
     [string]
     $ModulePath = "$PSScriptRoot\Modules",
@@ -280,6 +286,7 @@ $Operation = $null
 #-------------------------[ WINDOWS ERROR CODES ]--------------------------
 
 $ERRCODE_USER_ALREADY_A_MEMBER = 0x80070562
+$ERRCODE_USER_IS_NOT_A_MEMBER  = 0x80070561
 
 #------------------------------[ EXIT CODES]-------------------------------
 
@@ -912,9 +919,22 @@ function Init {
     param(
     )
 
+    $modes = 0
+
+    # Make sure that only one mode is selected (can happen via config file).
+    if ($Script:Export) { $modes++ }
+    if ($Script:Import) { $modes++ }
+    if ($Script:Delete) { $modes++ }
+
     # Export is the default operation.
-    if (!$Script:Export -and !$Script:Import -and !$Script:Delete) {
+    if ($modes -eq 0) {
         $Script:Export = $true
+    }
+    elseif ($modes -gt 1) {
+        throw [System.Management.Automation.ParameterBindingException] `
+            ("Multiple operation modes (-Export, -Import, -Delete) specified. " +
+            "Please makes sure that only one mode is set between the " +
+            "command-line arguments and the script's configuration file.")
     }
 
     # Set the operation string for display purposes.
@@ -1086,7 +1106,7 @@ function Import {
         $total = CountLines $Script:DataFile $Script:MaxLineCount
 
         LogDetailed "Lines in the data file:"
-        LogDetailed (Indent $total)
+        LogDetailed (Indent $total.ToString())
     }
 
     $reader = [System.IO.File]::OpenText($Script:DataFile)
@@ -1139,7 +1159,7 @@ function Import {
 
                 if (-not ([ADSI]::Exists($groupCN))) {
                     if (!$Script:Test) {
-                        if (-not (CreateGroup $groupName $description)) {
+                        if (-not (CreateGroup $server $groupName $description)) {
                             # Could not create the groups: no point in assigning members.
                             $skipMembers = $true
                         }
@@ -1169,7 +1189,7 @@ function Import {
             LogDetailed (Indent $account)
             try {
                 if (!$Script:Test) {
-                   ([ADSI]$groupCN).Add($account)
+                   ([ADSI]$groupCN).Add($account) | Out-Null
                 }
                 $count++
             }
@@ -1388,7 +1408,7 @@ function Delete {
         $total = CountLines $Script:DataFile $Script:MaxLineCount
 
         LogDetailed "Lines in the data file:"
-        LogDetailed (Indent $total)
+        LogDetailed (Indent $total.ToString())
     }
 
     $reader = [System.IO.File]::OpenText($Script:DataFile)
@@ -1443,7 +1463,7 @@ function Delete {
                 if ([ADSI]::Exists($groupCN)) {
                     try {
                         if (!$Script:Test) {
-                            $server.Delete('group', $groupName);
+                            ([ADSI]$server).Delete('group', $groupName) | Out-Null
                         }
 
                         # No need to delete members if the group was deleted.
@@ -1495,14 +1515,12 @@ function Delete {
                 else {
                     try {
                         if (!$Script:Test) {
-                            ([ADSI]$groupCN).Remove($account)
+                            ([ADSI]$groupCN).Remove($account) | Out-Null
                         }
                         $count++
                     }
                     catch {
-                        $_.Exception.InnerException.ErrorCode
-
-                        if ($_.Exception.InnerException.ErrorCode -eq $ERRCODE_USER_ALREADY_A_MEMBER) {
+                        if ($_.Exception.InnerException.ErrorCode -eq $ERRCODE_USER_IS_NOT_A_MEMBER) {
                             $count++
                         }
                         else {
@@ -1645,17 +1663,19 @@ if ($ErrLogFile) {
 $count = 0
 
 try {
+    $operationStartTime = Get-Date
+
     if ($Export) {
         LogMessage "Exporting..."
-        $count = Export $startTime
+        $count = Export $operationStartTime
     }
     elseif ($Import) {
         LogMessage "Importing..."
-        $count = Import $startTime
+        $count = Import $operationStartTime
     }
     else {
         LogMessage "Deleting..."
-        $count = Delete $startTime
+        $count = Delete $operationStartTime
     }
 }
 catch {
@@ -1663,7 +1683,7 @@ catch {
 }
 
 LogMessage "Processed items:"
-LogMessage (Indent $count)
+LogMessage (Indent $count.ToString())
 
 $endTime = Get-Date
 
