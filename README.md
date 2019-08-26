@@ -236,7 +236,7 @@ The number of items that must be processed between progress updates. Set to high
 
 `-Test`
 
-Use this switch to verify the process and data without making changes to the server. Applies to imports only.
+Use this switch to verify the process and data without making changes to the server (for the import or delete operations) or the data file (for exports).
 
 `-Detailed`
 
