@@ -2,12 +2,16 @@
 
 <#
 .SYNOPSIS
-Exports or imports local group members on a local or remote computer.
+Exports, imports, or deletes local group members on a local or remote computer.
 
 .DESCRIPTION
-This script can be used to export or import local groups and group members to or from a local or remote computer.
+This script can be used to:
 
-During export, you can filter groups by name and/or description using regular expressions. You can also specify the exclusion lists (also by names and descriptions) using the configuration file. In a similar manner you can specify which accounts to include or exclude during the export operation.
+- export local groups and/or members from a local or remote computer to a text file,
+- import local groups and/or members to a local or remote computer from a text file, or
+- delete local groups and/or members specified in a text file on a local or remote computer.
+
+During export, you can filter groups by name and/or description using regular expressions. You can also specify the exclusion lists (also by names and descriptions) using the configuration file. In a similar manner you can specify which group members to include or exclude during the export operation.
 
 The script allows you to specify the non-default parameters and settings via an optional configuration file (see the description of the '-ConfigFile' parameter). Please keep in mind that the command-line parameters override the config file settings.
 
@@ -21,13 +25,13 @@ If the system on which the script runs has limited or does not have access to th
 You can log the information about the performed operations and/or errors to the log and/or error log files.
 
 .PARAMETER Export
-Export local groups to the data file.
+Export local groups and/or members to a data file.
 
 .PARAMETER Import
-Import local groups from the data file.
+Import local groups and/or members from a data file.
 
 .PARAMETER Delete
-Delete local groups and/or members specified in the data file.
+Delete local groups and/or members specified in a data file.
 
 .PARAMETER DataFile
 Defines the full path to the date file holding imported or exported data. The data file contains three text entries separated by tabs (or explicitly defined separator):
