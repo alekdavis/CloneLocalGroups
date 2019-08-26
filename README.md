@@ -198,6 +198,10 @@ Use this switch to export groups only (without members). Applies to exports only
 
 When set, the data file will or will be assumed to include column header in the first row.
 
+`-ComputerName`
+
+Name of the computer on which the operation must be performed. If not specified, the current computer will be used.
+
 `-ModulePath`
 
 Optional path to directory holding the modules used by this script. This can be useful if the script runs on the system with no or restricted access to the Internet. By default, the module path will point to the 'Modules' folder in the script's folder.
