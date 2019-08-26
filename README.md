@@ -210,7 +210,8 @@ Optional path to directory holding the modules used by this script. This can be 
 
 When set to true, informational messages will be written to a log file. The default log file will be created in the backup folder and will be named after the name of Computer and operation with the '.log' extension, such as 'MYSERVER.Export.log' or 'MYSERVER.Import.log'.
 
-.PARAMETER LogFile
+`-LogFile`
+
 Use this switch to specify a custom log file location. When this parameter is set to a non-null and non-empty value, the '-Log' switch can be omitted.
 
 `-LogAppend`
