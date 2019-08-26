@@ -1,10 +1,14 @@
 # CloneLocalGroups.ps1
-This [PowerShell](https://docs.microsoft.com/en-us/powershell/scripting/overview) script can be used to export or import local groups and group members to or from a local or remote computer.
+This [PowerShell](https://docs.microsoft.com/en-us/powershell/scripting/overview) script can be used to export, import, or delete local groups and group members on a local or remote computer.
 
 ## Overview
-Use the `CloneLocalGroups.ps1` script to export local groups (with their members) from a local or remote computer into a text file that you can use to import them back (also on a local or remote computer).
+Use the `CloneLocalGroups.ps1` script:
 
-During export, you can filter groups by name and/or description using regular expressions. You can also specify the exclusion lists (also by names and descriptions) using the configuration file. In a similar manner you can specify which accounts to include or exclude during the export operation.
+- export local groups and/or members from a local or remote computer to a text file,
+- import local groups and/or members to a local or remote computer from a text file, or
+- delete local groups and/or members specified in a text file on a local or remote computer.
+
+During export, you can filter groups by name and/or description using regular expressions. You can also specify the exclusion lists (also by names and descriptions) using the configuration file. In a similar manner you can specify which group members to include or exclude during the export operation.
 
 ### Script execution
 You must launch PlexBackup _as administrator_ while being logged in under the same account your Plex Media Server runs.
@@ -53,6 +57,7 @@ A config file must use [JSON formatting](https://www.json.org/), such as:
     },
     "Export": { "value": null },
     "Import": { "value": null },
+    "Delete": { "value": null },
     "DataFile": { "value": null },
     "Separator": { "value": null },
     "ExcludeEmptyGroups": { "value": null },
@@ -75,11 +80,6 @@ A config file must use [JSON formatting](https://www.json.org/), such as:
     "NoLogo": { "value": null }
 }
 ```
-The `_meta` element describes the file and the file structure. It does not include any configuration settings. The important attributes  of the `_meta` element are:
-
-- `version`: can be used to handle future file schema changes, and
-- `strictMode`: when set to `true` every config setting that needs to be used must have the `hasValue` attribute set to `true`; if the `strictMode` element is missing or if its value is set to `false`, every config setting that gets validated by the PowerShell's `if` statement will be used.
-
 Make sure you use proper JSON formatting (escape characters, etc) when defining the config values (e.g. you must escape each backslash characters with another backslash).
 
 ### Logging
@@ -138,11 +138,15 @@ Use the `ErrLog` switch to write error messages to a dedicated error log file. B
 
 `-Export`
 
-Tells the script to perform the export operation, which is the default mode.
+Export local groups and/or members to a data file. This is the default operation mode (when neither `-Export`, nor `-Import`, nor `-Delete` is specified).
 
 `-Import`
 
-Tells the script to perform the import operation. If not specified, the '-Export' parameter will be assumed.
+Import local groups and/or members from a data file.
+
+`-Delete`
+
+Delete local groups and/or members specified in a data file.
 
 `-DataFile`
 
@@ -160,6 +164,11 @@ Group B{TAB}WinNT://CONTOSO/jdoe{TAB}Group with two members.
 Group B{TAB}WinNT://CONTOSO/jschmoe{TAB}
 Group C{TAB}WinNT://CONTOSO/mjane{TAB}Group with one member.
 ```
+When exporting data, if the 'ExcludeEmptyGroups' switch is not set, all data file entries will contain group members; otherwise, there will be a separate entry for each exported group with no member information.
+
+The group description is needed only the first time the group appears in the data file.
+
+When deleting data, if the data file entry does not include member information, the whole group will be deleted. If member information is included, the member will be removed from the group.
 
 `-Separator`
 
@@ -180,6 +189,14 @@ Specifies the regular expression that the group descriptions must match. Applies
 `-AccountRegex`
 
 Specifies the regular expression that the member account name must match. Applies to exports only.
+
+`-NoMembers`
+
+Use this switch to export groups only (without members). Applies to exports only.
+
+`-WithHeader`
+
+When set, the data file will or will be assumed to include column header in the first row.
 
 `-ModulePath`
 
@@ -208,9 +225,9 @@ Use this switch to specify a custom error log file location. When this parameter
 
 Use this switch to appended error log entries to the existing error log file, if it exists (by default, the old error log file will be overwritten).
 
-`-HideProgressBar`
+`-ProgressInterval`
 
-Use this switch to suppress progress bar.
+The number of items that must be processed between progress updates. Set to higher number (100, 1000) for better performance. Set to 0 to not display progress bar.
 
 `-Test`
 
@@ -240,13 +257,13 @@ The following examples assume that the the default settings are used for the uns
 ```
 .\CloneLocalGroups.ps1
 ```
-Exports local groups with members to the default data file.
+Export local groups with members to the default data file.
 
 #### Example 2
 ```
 .\CloneLocalGroups.ps1 -Import -DataFile "D:\Data\MYSERVER.txt"
 ```
-Imports local groups with members from the specified data file.
+Import local groups with members from the specified data file.
 
 #### Example 3
 ```
@@ -255,6 +272,12 @@ Imports local groups with members from the specified data file.
 Perform a dry run for the import operation without creating groups or assigning group members.
 
 #### Example 4
+```
+.\CloneLocalGroups.ps1 -Delete -DataFile "D:\Data\MYSERVER.txt"
+```
+Delete local groups and/or members defined in the specified data file.
+
+#### Example 5
 ```
 Get-Help .\CloneLocalGroups.ps1
 ```
