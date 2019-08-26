@@ -252,6 +252,9 @@ param (
     [Alias("Progress")]
     $ProgressInterval = 1,
 
+    
+    [Parameter(ParameterSetName="Import")]
+    [Parameter(ParameterSetName="Delete")]
     [Alias("T")]
     [switch]
     $Test,
