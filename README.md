@@ -115,7 +115,7 @@ Use the `ErrLog` switch to write error messages to a dedicated error log file. B
     [<CommonParameters>]
 
 .\CloneLocalGroups.ps1 ` 
-    -Import `
+    [-Import | -Delete] `
     [[-DataFile] <String>] `
     [-Separator <String>] `
     [-ModulePath <String>] `
