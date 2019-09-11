@@ -1597,7 +1597,9 @@ foreach ($module in $modules) {
         LoadModule -ModuleName $module
     }
     catch {
-        LogWarning "Cannot load module $module." $false
+        $_
+        Write-Error "Cannot load module $module."
+        
         exit $EXITCODE_ERROR
     }
 }
@@ -1615,7 +1617,8 @@ try {
     Import-ConfigFile -ConfigFilePath $ConfigFile -DefaultParameters $PSBoundParameters
 }
 catch {
-    LogMessage "Cannot initialize run-time configuration settings." $false
+    $_
+    Write-Error "Cannot initialize run-time configuration settings."
     exit $EXITCODE_ERROR
 }
 
