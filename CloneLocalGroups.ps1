@@ -598,7 +598,7 @@ function Log {
         }
     }
     else {
-        if ($textColor -eq -1) {
+        if ([int]$textColor -eq -1) {
             [System.ConsoleColor]$foregroundColor = [System.ConsoleColor]::White
         }
         else {
