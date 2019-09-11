@@ -117,9 +117,9 @@ Specify this command-line switch to not print version and copyright info.
 Path to the optional custom config file. The default config file is named after the script with the '.json' extension, such as 'CloneLocalGroups.ps1.json'.
 
 .NOTES
-Version    : 1.0.5
+Version    : 1.0.6
 Author     : Alek Davis
-Created on : 2019-08-22
+Created on : 2019-09-11
 License    : MIT License
 LicenseLink: https://github.com/alekdavis/CloneLocalGroups/blob/master/LICENSE
 Copyright  : (c) 2019 Alek Davis
